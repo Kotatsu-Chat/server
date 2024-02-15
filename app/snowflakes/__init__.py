@@ -64,7 +64,7 @@ class ParameterID(Enum):
     CATEGORY = 7
 
 
-class SnowflakeFactory:
+class _SnowflakeFactory:
     def __init__(self) -> None:
         self._bc_seq = BitCounter(12)
         pass
@@ -82,3 +82,6 @@ class SnowflakeFactory:
     @staticmethod
     def parse_snowflake(input_snowflake: str) -> (datetime, int, int, int):
         return RollplayerChatSnowflake.parse_snowflake(input_snowflake)
+
+
+SnowflakeFactory = _SnowflakeFactory()

@@ -3,7 +3,7 @@ from datetime import timedelta
 from fastapi import FastAPI, Depends, status, HTTPException
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
-from app.database import User
+from app.database import User, create_message, Message
 from app.passwords import Token, authenticate_user, ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, \
     get_current_active_user, pwd_context
 from app.snowflakes import SnowflakeFactory
@@ -22,21 +22,19 @@ async def get_test():
 async def read_users_me(current_user: Annotated[User, Depends(get_current_active_user)]):
     return current_user
 
-@app.post("/message/send/{server_id}/{channel_id}",
+@app.post("/channel/{channel_id}/sendmessage",
           status_code=status.HTTP_201_CREATED,
           responses={status.HTTP_400_BAD_REQUEST:
                          {"model": ErrorDetail,
                           "description": "The message was too long."}
                      })
-async def send_message(server_id: int, channel_id: int, message: ClientMessageSend, token: Annotated[str, Depends(oauth2_scheme)]):
-    print(message, server_id, channel_id)
+async def send_message(channel_id: int, message: ClientMessageSend, current_user: Annotated[User, Depends(get_current_active_user)]) -> Message:
+    print(message, channel_id, current_user["snowflake"])
     if len(message.message) >= 4096:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message too long")
+    message = create_message(message.message, channel_id, current_user["snowflake"])
+    print(message)
     return message
-
-    return {"message": messagereturn.message, "server_id": server_id, "channel_id": channel_id, "snowflake": 0}
-
-
 
 @app.get("/snowflake/info/{snowflake}",
          description="Parses a snowflake and gets information about it [the type of snowflake]")

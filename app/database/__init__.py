@@ -8,7 +8,7 @@ from sqlmodel import Field, SQLModel, create_engine, Session, select
 from fastapi import status
 
 from app.models import User
-
+from app.snowflakes import SnowflakeFactory, ParameterID
 
 
 class Message(SQLModel, table=True):
@@ -44,6 +44,7 @@ class DBUser(User, table=True):
     password_hashed: str = Field(nullable=False)
     servers: str = Field(nullable=False)
 
+
 sqlite_file_name = "main.db"
 sqlite_url = f"sqlite:///userdata/{sqlite_file_name}"
 
@@ -52,3 +53,18 @@ engine = create_engine(sqlite_url, echo=True, pool_pre_ping=True)
 SQLModel.metadata.create_all(engine)
 
 
+def create_message(message: str, channelid: int, userid: int) -> Message:
+    """
+
+    returns a Message object that's been written to the server.
+    """
+    message = Message(snowflake=SnowflakeFactory.get_snowflake(ParameterID.MESSAGE.value), channel=channelid,
+                      userid=userid, message=message, editflag=0)
+    retmessage = message.model_copy()  # needed since message gets used below
+
+    with Session(engine) as session:
+        session.add(message)
+        session.commit()
+
+    print(retmessage)
+    return retmessage
