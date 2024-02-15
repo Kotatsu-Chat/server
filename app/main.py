@@ -10,7 +10,7 @@ from app.snowflakes import SnowflakeFactory
 from app.models import ClientMessageSend, ErrorDetail
 
 from typing import Annotated
-app = FastAPI(title="Rollplayer Chat 3 API", version="0.0.1")
+app = FastAPI(title="Rollplayer Chat 3 API", version="0.0.1", root_path="/api")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
