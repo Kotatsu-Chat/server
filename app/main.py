@@ -16,7 +16,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 @app.get("/test")
 async def get_test():
-    print(pwd_context.hash("example"))
+    print(pwd_context.hash("123"))
     return {"message": ""}
 @app.get("/users/me")
 async def read_users_me(current_user: Annotated[User, Depends(get_current_active_user)]):

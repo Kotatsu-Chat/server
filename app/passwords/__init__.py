@@ -3,13 +3,13 @@ from typing import Annotated
 
 from fastapi import HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer
-from jose import jwt
+from jose import jwt, JWTError
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlmodel import select, Session
 from starlette import status
 
-from app.database import DBUser, engine, AppSecrets
+from app.database import DBUser, engine
 from app.models import User
 from app.secrets import secrets
 
@@ -47,6 +47,7 @@ def get_user(username: str):
 
 
 def authenticate_user(username: str, password: str):
+    print(f"Authenticating user {username} w/ pw {password}")
     user = get_user(username)
     if not user:
         return False
@@ -55,22 +56,30 @@ def authenticate_user(username: str, password: str):
     return user
 
 
-def fake_decode_token(token):
-    # This doesn't provide any security at all
-    # Check the next version
-    user = get_user(token)
-    return user
+class TokenData(BaseModel):
+    username: str | None = None
 
 
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
-    user = fake_decode_token(token)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, get_secrets()['bcrypt_secret_key'], algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        token_data = TokenData(username=username)
+    except JWTError:
+        raise credentials_exception
+    user = get_user(username=token_data.username)
+    if user is None:
+        raise credentials_exception
+    user.pop("password_hashed")
     return user
+
 
 
 async def get_current_active_user(

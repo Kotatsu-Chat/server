@@ -44,12 +44,6 @@ class DBUser(User, table=True):
     password_hashed: str = Field(nullable=False)
     servers: str = Field(nullable=False)
 
-
-class AppSecrets(SQLModel, table=True):
-    filler_pk: str = Field(primary_key=True)
-    bcrypt_secret_key: str = Field(nullable=False)
-
-
 sqlite_file_name = "main.db"
 sqlite_url = f"sqlite:///userdata/{sqlite_file_name}"
 
