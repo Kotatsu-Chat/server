@@ -2,25 +2,34 @@ from datetime import timedelta
 
 from fastapi import FastAPI, Depends, status, HTTPException
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from app.database import User, create_message, Message
 from app.passwords import Token, authenticate_user, ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, \
-    get_current_active_user, pwd_context
+    get_current_active_user, pwd_context, get_user, get_current_user
 from app.snowflakes import SnowflakeFactory
-from app.models import ClientMessageSend, ErrorDetail
+from app.models import ClientMessageSend, ErrorDetail, ConnectionManager
 
 from typing import Annotated
+
 app = FastAPI(title="Rollplayer Chat 3 API", version="0.0.1", root_path="/api")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
 
 @app.get("/test")
 async def get_test():
     print(pwd_context.hash("123"))
     return {"message": ""}
+
+
 @app.get("/users/me")
 async def read_users_me(current_user: Annotated[User, Depends(get_current_active_user)]):
     return current_user
+
+
+manager = ConnectionManager()
+
 
 @app.post("/channel/{channel_id}/sendmessage",
           status_code=status.HTTP_201_CREATED,
@@ -28,13 +37,34 @@ async def read_users_me(current_user: Annotated[User, Depends(get_current_active
                          {"model": ErrorDetail,
                           "description": "The message was too long."}
                      })
-async def send_message(channel_id: int, message: ClientMessageSend, current_user: Annotated[User, Depends(get_current_active_user)]) -> Message:
-    print(message, channel_id, current_user["snowflake"])
+async def send_message(channel_id: int, message: ClientMessageSend,
+                       current_user: Annotated[User, Depends(get_current_active_user)]) -> Message:
     if len(message.message) >= 4096:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message too long")
-    message = create_message(message.message, channel_id, current_user["snowflake"])
-    print(message)
-    return message
+    created_message = create_message(message.message, channel_id, current_user["snowflake"])
+    # Broadcast the message to all clients in the channel
+    await manager.broadcast(str(created_message.model_dump()), channel_id)
+    return created_message
+
+
+@app.websocket("/channel/{channel_id}/listen")
+async def websocket_endpoint(channel_id: int, websocket: WebSocket):
+    await manager.connect(websocket, channel_id)
+    try:
+        pass
+        # token = await websocket.receive_text()
+        # user = get_current_user(token)
+        # TODO: validate user is in the server that the channel is in
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    try:
+        while True:
+            # Wait for any message to manage the connection, but don't use the data
+            await websocket.receive_text()
+            # No broadcasting here, as this endpoint is for listening
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
 
 @app.get("/snowflake/info/{snowflake}",
          description="Parses a snowflake and gets information about it [the type of snowflake]")
@@ -42,10 +72,9 @@ async def snowflake_info(snowflake: int):
     return {"type": SnowflakeFactory.parse_snowflake(str(snowflake))[1]}
 
 
-
 @app.post("/token")
 async def login_for_access_token(
-    form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
+        form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
 ) -> Token:
     user = authenticate_user(form_data.username, form_data.password)
     if not user:
