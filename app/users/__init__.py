@@ -12,6 +12,7 @@ from starlette import status
 from app.database import DBUser, engine
 from app.models import User
 from app.secrets import secrets
+from app.snowflakes import SnowflakeFactory, ParameterID
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -19,6 +20,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
 
 class Token(BaseModel):
     access_token: str
@@ -37,6 +39,15 @@ def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
 
+def create_new_user(username: str, password: str):
+    user = DBUser(username=username, password_hashed=hash_password(password),
+                  snowflake=SnowflakeFactory.get_snowflake(ParameterID.USER.value), servers=str([]))
+    with Session(engine) as session:
+        session.add(user)
+        session.commit()
+        return user
+
+
 def get_user(username: str):
     with Session(engine) as session:
         statement = select(DBUser).where(DBUser.username == username)
@@ -46,8 +57,17 @@ def get_user(username: str):
         return user
 
 
+def get_user_from_id(user_id: int):
+    with Session(engine) as session:
+        statement = select(DBUser).where(DBUser.snowflake == user_id)
+        results = session.exec(statement)
+        user = results.first()
+        user = user.model_dump() if user is not None else None
+        user.pop("password_hashed")
+        return user
+
+
 def authenticate_user(username: str, password: str):
-    print(f"Authenticating user {username} w/ pw {password}")
     user = get_user(username)
     if not user:
         return False
@@ -79,7 +99,6 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         raise credentials_exception
     user.pop("password_hashed")
     return user
-
 
 
 async def get_current_active_user(

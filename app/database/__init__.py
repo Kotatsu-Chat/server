@@ -1,4 +1,4 @@
-from typing import Optional, Annotated
+from typing import Optional, Annotated, List
 
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
@@ -17,6 +17,11 @@ class Message(SQLModel, table=True):
     channel: int = Field(nullable=False)
     userid: int = Field(nullable=False)
     editflag: int = Field(nullable=False, default=0)
+
+
+class MessageReply(SQLModel, table=False):
+    message: Message
+    user: User
 
 
 class Role(SQLModel, table=True):
@@ -66,5 +71,57 @@ def create_message(message: str, channelid: int, userid: int) -> Message:
         session.add(message)
         session.commit()
 
-    print(retmessage)
     return retmessage
+
+
+def get_message_from_id(channel_id: int, message_id: int) -> MessageReply:
+    with Session(engine) as session:
+        statement = select(Message).where(Message.snowflake == message_id)
+        results = session.exec(statement)
+        message = results.first()
+        userstatement = select(DBUser).where(DBUser.snowflake == message.model_dump()["userid"])
+        userresults = session.exec(userstatement)
+        user = userresults.one()
+        userdump = user.model_dump()
+        userdump.pop("password_hashed")
+        user = User(snowflake=userdump["snowflake"], username=userdump["username"], servers=userdump["servers"])
+        return MessageReply(message=message, user=user)
+
+
+def get_message_near_id(channel_id: int, message_id: int, count: int = 25, type: int = -1) -> list[MessageReply]:
+    """
+    returns a list of Message objects
+    :param channel_id: channel to get messages in
+    :param message_id: base message
+    :param count: amount of messages to get
+    :param type: -1 = before this message, 1 = after the message. 0 is null for now.
+    :return: a list of Messages
+    """
+    count = max(min(count, 50), 1)
+    if type == 1:
+        with Session(engine) as session:
+            statement = select(Message).where(Message.snowflake > message_id).where(Message.channel == channel_id).limit(count)
+            results = session.exec(statement)
+            resultlist = []
+            for res in results:
+                userstatement = select(DBUser).where(DBUser.snowflake == res.model_dump()["userid"])
+                userresults = session.exec(userstatement)
+                user = userresults.one()
+                userdump = user.model_dump()
+                userdump.pop("password_hashed")
+                user = User(snowflake=userdump["snowflake"], username=userdump["username"], servers=userdump["servers"])
+                resultlist.append(MessageReply(message=res, user=user))
+    else:
+        with Session(engine) as session:
+            statement = select(Message).where(Message.snowflake < message_id).where(Message.channel == channel_id).limit(count)
+            results = session.exec(statement)
+            resultlist = []
+            for res in results:
+                userstatement = select(DBUser).where(DBUser.snowflake == res.model_dump()["userid"])
+                userresults = session.exec(userstatement)
+                user = userresults.one()
+                userdump = user.model_dump()
+                userdump.pop("password_hashed")
+                user = User(snowflake=userdump["snowflake"], username=userdump["username"], servers=userdump["servers"])
+                resultlist.append(MessageReply(message=res, user=user))
+    return resultlist
