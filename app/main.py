@@ -5,9 +5,10 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from app.database import User, create_message, Message, get_message_from_id, get_message_near_id, MessageReply
-from app.users import Token, authenticate_user, ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, \
-    get_current_active_user, pwd_context, get_user, get_current_user, get_user_from_id, create_new_user
-from app.snowflakes import SnowflakeFactory
+from app.users import Token, authenticate_user, ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token
+from app.users import get_current_active_user, pwd_context, get_user, get_current_user, get_user_from_id, \
+    create_new_user
+from app.snowflakes import snowfactory
 from app.models import ClientMessageSend, ErrorDetail, ConnectionManager
 
 from typing import Annotated, List
@@ -28,16 +29,16 @@ async def read_users_me(current_user: Annotated[User, Depends(get_current_active
     return current_user
 
 
-@app.get("/users/new", name="New User", description="Create a new user. Username limited to 64 chars, password limited to 72 chars")
+@app.get("/users/new", name="New User",
+         description="Create a new user. Username limited to 64 chars, password limited to 72 chars")
 async def new_user(username: Annotated[str | None, Query(max_length=64)],
-                   password: Annotated[str | None, Query(max_length=72)],):
+                   password: Annotated[str | None, Query(max_length=72)], ):
     return create_new_user(username, password)
 
 
 @app.get("/users/info/{user_id}")
 async def read_user_from_id(user_id: int):
     return get_user_from_id(user_id)
-
 
 
 manager = ConnectionManager()
@@ -50,13 +51,13 @@ manager = ConnectionManager()
                           "description": "The message was too long."}
                      })
 async def send_message(channel_id: int, message: ClientMessageSend,
-                       current_user: Annotated[User, Depends(get_current_active_user)]) -> int:
+                       current_user: Annotated[User, Depends(get_current_active_user)]) -> MessageReply:
     if len(message.message) >= 4096:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message too long")
-    created_message = create_message(message.message, channel_id, current_user["snowflake"]).model_dump()
+    created_message = create_message(message.message, channel_id, current_user["snowflake"])
     # Broadcast the message to all clients in the channel
-    await manager.broadcast(str(created_message), channel_id)
-    return created_message["snowflake"]
+    await manager.broadcast(str(created_message.model_dump()), channel_id)
+    return created_message
 
 
 @app.post("/channel/{channel_id}/getmessage/{message_id}")
@@ -72,6 +73,14 @@ async def get_message(channel_id: int, message_id: int,
                       type: Annotated[str | None, Query(max_length=5)],
                       current_user: Annotated[User, Depends(get_current_active_user)]) -> list[MessageReply]:
     return get_message_near_id(channel_id, message_id, int(count), int(type))
+
+
+@app.get("/channel/{channel_id}/listen", name="WebSocket Channel Listening Endpoint", description="""
+This endpoint is actually a websocket interface - GETting from it will do nothing and return a 200.
+You can attach to it using websockets, then just listening for a message [in MessageReply format].
+Later, this will ask for an authentication token, but it doesn't currently.""")
+async def listen():
+    return ""
 
 
 @app.websocket("/channel/{channel_id}/listen")
@@ -96,7 +105,7 @@ async def websocket_endpoint(channel_id: int, websocket: WebSocket):
 @app.get("/snowflake/info/{snowflake}",
          description="Parses a snowflake and gets information about it [the type of snowflake]")
 async def snowflake_info(snowflake: int):
-    return {"type": SnowflakeFactory.parse_snowflake(str(snowflake))[1]}
+    return {"type": snowfactory.parse(str(snowflake))[1]}
 
 
 @app.post("/token")

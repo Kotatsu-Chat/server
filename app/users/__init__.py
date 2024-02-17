@@ -12,7 +12,7 @@ from starlette import status
 from app.database import DBUser, engine
 from app.models import User
 from app.secrets import secrets
-from app.snowflakes import SnowflakeFactory, ParameterID
+from app.snowflakes import snowfactory, ParameterID
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -41,8 +41,11 @@ def verify_password(plain_password, hashed_password):
 
 def create_new_user(username: str, password: str):
     user = DBUser(username=username, password_hashed=hash_password(password),
-                  snowflake=SnowflakeFactory.get_snowflake(ParameterID.USER.value), servers=str([]))
+                  snowflake=snowfactory.generate(ParameterID.USER.value), servers=str([]))
     with Session(engine) as session:
+        if session.exec(select(DBUser).where(DBUser.username == username)).first():
+            raise HTTPException(422, f"User with username {username} already exists")
+
         session.add(user)
         session.commit()
         return user

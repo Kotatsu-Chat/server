@@ -8,7 +8,7 @@ from sqlmodel import Field, SQLModel, create_engine, Session, select
 from fastapi import status
 
 from app.models import User
-from app.snowflakes import SnowflakeFactory, ParameterID
+from app.snowflakes import snowfactory, ParameterID
 
 
 class Message(SQLModel, table=True):
@@ -58,20 +58,31 @@ engine = create_engine(sqlite_url, echo=True, pool_pre_ping=True)
 SQLModel.metadata.create_all(engine)
 
 
-def create_message(message: str, channelid: int, userid: int) -> Message:
+def create_message(message: str, channelid: int, userid: int) -> MessageReply:
     """
 
     returns a Message object that's been written to the server.
     """
-    message = Message(snowflake=SnowflakeFactory.get_snowflake(ParameterID.MESSAGE.value), channel=channelid,
+    snowflakeid = snowfactory.generate(ParameterID.MESSAGE.value)
+    message = Message(snowflake=snowflakeid, channel=channelid,
                       userid=userid, message=message, editflag=0)
-    retmessage = message.model_copy()  # needed since message gets used below
 
     with Session(engine) as session:
         session.add(message)
         session.commit()
 
-    return retmessage
+    with Session(engine) as session:
+        statement = select(Message).where(Message.snowflake == snowflakeid)
+        results = session.exec(statement)
+        replymessage = results.first()
+        userstatement = select(DBUser).where(DBUser.snowflake == replymessage.model_dump()["userid"])
+        userresults = session.exec(userstatement)
+        user = userresults.one()
+        userdump = user.model_dump()
+        userdump.pop("password_hashed")
+        user = User(snowflake=userdump["snowflake"], username=userdump["username"], servers=userdump["servers"])
+        return MessageReply(message=replymessage, user=user)
+
 
 
 def get_message_from_id(channel_id: int, message_id: int) -> MessageReply:
