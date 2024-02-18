@@ -2,6 +2,8 @@ from datetime import timedelta
 
 from fastapi import FastAPI, Depends, status, HTTPException, Query
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from sqlalchemy.exc import NoResultFound
+from starlette.responses import Response
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from app.database import User, create_message, Message, get_message_from_id, get_message_near_id, MessageReply
@@ -56,7 +58,7 @@ async def send_message(channel_id: int, message: ClientMessageSend,
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message too long")
     created_message = create_message(message.message, channel_id, current_user["snowflake"])
     # Broadcast the message to all clients in the channel
-    await manager.broadcast(str(created_message.model_dump()), channel_id)
+    await manager.broadcast(str(created_message.model_dump_json()), channel_id)
     return created_message
 
 
@@ -67,12 +69,18 @@ async def get_message(channel_id: int, message_id: int,
 
 
 @app.post("/channel/{channel_id}/getmessages/{message_id}",
-          description="Gets messages before or after the message ID. `type` is the direction. -1 is before, 1 is after. Defaults to -1.")
-async def get_message(channel_id: int, message_id: int,
+          description="Gets messages before or after the message ID. `type` is the direction. -1 is before, 1 is after. Defaults to -1.",
+          responses={status.HTTP_204_NO_CONTENT: {"description": "No messages found"}})
+async def get_messages(channel_id: int, message_id: int,
                       count: Annotated[str | None, Query(max_length=5)],
                       type: Annotated[str | None, Query(max_length=5)],
-                      current_user: Annotated[User, Depends(get_current_active_user)]) -> list[MessageReply]:
-    return get_message_near_id(channel_id, message_id, int(count), int(type))
+                      current_user: Annotated[User, Depends(get_current_active_user)]):
+    try:
+        return get_message_near_id(channel_id, message_id, int(count), int(type))
+    except NoResultFound as e:
+        return Response(status_code=204)
+
+
 
 
 @app.get("/channel/{channel_id}/listen", name="WebSocket Channel Listening Endpoint", description="""

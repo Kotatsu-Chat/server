@@ -33,11 +33,11 @@ class Role(SQLModel, table=True):
 
 class Server(SQLModel, table=True):
     snowflake: int = Field(unique=True, primary_key=True, nullable=False)
-    channels: str = Field(nullable=False)
+    channels: Optional[str] = "[]"
     users: str = Field(nullable=False)
-    roles: str = Field(nullable=False)
+    roles: Optional[str] = "[]"
     server_name: str = Field(nullable=False)
-    nicknames: str = Field(nullable=False)
+    nicknames: Optional[str] = "{}"
     server_owner_id: int = Field(nullable=False)
 
 
@@ -111,7 +111,7 @@ def get_message_near_id(channel_id: int, message_id: int, count: int = 25, type:
     count = max(min(count, 50), 1)
     if type == 1:
         with Session(engine) as session:
-            statement = select(Message).where(Message.snowflake > message_id).where(Message.channel == channel_id).limit(count)
+            statement = select(Message).where(Message.snowflake > message_id).where(Message.channel == channel_id).order_by(Message.snowflake.asc()).limit(count)
             results = session.exec(statement)
             resultlist = []
             for res in results:
@@ -124,7 +124,7 @@ def get_message_near_id(channel_id: int, message_id: int, count: int = 25, type:
                 resultlist.append(MessageReply(message=res, user=user))
     else:
         with Session(engine) as session:
-            statement = select(Message).where(Message.snowflake < message_id).where(Message.channel == channel_id).limit(count)
+            statement = select(Message).where(Message.snowflake < message_id).where(Message.channel == channel_id).order_by(Message.snowflake.desc()).limit(count).order_by(Message.snowflake.asc())
             results = session.exec(statement)
             resultlist = []
             for res in results:

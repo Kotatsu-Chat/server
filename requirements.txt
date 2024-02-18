@@ -1,0 +1,7 @@
+fastapi~=0.109.2
+passlib~=1.7.4
+pydantic~=2.6.1
+sqlmodel~=0.0.14
+starlette~=0.36.3
+SQLAlchemy~=2.0.27
+flakemaker~=1.0.0
