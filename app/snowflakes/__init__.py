@@ -11,6 +11,7 @@ class ParameterID(Enum):
     USER = 4
     SERVER = 5
     CATEGORY = 6
+    INVITE = 7
 
 
 snowfactory = SnowflakeGenerator()

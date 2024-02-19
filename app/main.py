@@ -136,3 +136,12 @@ async def login_for_access_token(
 @app.post("/severs/new",name='New User',description='Create a new server. Server name is limited to 32 chars.')
 async def new_server(server_name: Annotated[str | None, Query(max_length=32)], user: Annotated[User, Depends(get_current_active_user)]) -> int:
     return create_new_server(server_name,user["snowflake"])["snowflake"]
+
+
+@app.get("/servers/{snowflake}/generate_invite")
+async def generate_server_invite(snowflake: int, user: Annotated[User, Depends(get_current_active_user)]) -> int:
+    return generate_invite(snowflake, user["snowflake"])["snowflake"]
+
+@app.post("/join/{snowflake}")
+async def join_server(snowflake: int, user: Annotated[User, Depends(get_current_active_user)]) -> int:
+    return user_join_server(snowflake, user["snowflake"])
