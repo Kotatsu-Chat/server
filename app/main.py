@@ -7,6 +7,7 @@ from starlette.responses import Response
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from app.database import User, create_message, Message, get_message_from_id, get_message_near_id, MessageReply
+from app.servers import create_new_server
 from app.users import Token, authenticate_user, ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token
 from app.users import get_current_active_user, pwd_context, get_user, get_current_user, get_user_from_id, \
     create_new_user
@@ -15,7 +16,7 @@ from app.models import ClientMessageSend, ErrorDetail, ConnectionManager
 
 from typing import Annotated, List
 
-app = FastAPI(title="Rollplayer Chat 3 API", version="0.0.1", root_path="/api")
+app = FastAPI(title="Kotatsu API", version="0.0.1", root_path="/api")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
