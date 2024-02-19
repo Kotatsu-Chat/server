@@ -133,6 +133,6 @@ async def login_for_access_token(
     )
     return Token(access_token=access_token, token_type="bearer")
 
-@app.post("/severs/new",name='New User',description='Create a new server. Server name is limited to 32 chars.')
+@app.post("/servers/new",name='New User',description='Create a new server. Server name is limited to 32 chars.')
 async def new_server(server_name: Annotated[str | None, Query(max_length=32)], user: Annotated[User, Depends(get_current_active_user)]) -> int:
     return create_new_server(server_name,user["snowflake"])["snowflake"]
