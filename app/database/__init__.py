@@ -4,7 +4,7 @@ from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 from pydantic import BaseModel
-from sqlmodel import Field, SQLModel, create_engine, Session, select
+from sqlmodel import Field, SQLModel, create_engine, Session, select, Relationship
 from fastapi import status
 
 from app.models import User
@@ -17,6 +17,10 @@ class Message(SQLModel, table=True):
     channel: int = Field(nullable=False)
     userid: int = Field(nullable=False)
     editflag: int = Field(nullable=False, default=0)
+
+class Invite(SQLModel, table=True):
+    snowflake: int = Field(unique=True, primary_key=True, nullable=False)
+    server_snowflake: int
 
 
 class MessageReply(SQLModel, table=False):
@@ -34,7 +38,7 @@ class Role(SQLModel, table=True):
 class Server(SQLModel, table=True):
     snowflake: int = Field(unique=True, primary_key=True, nullable=False)
     channels: Optional[str] = "[]"
-    users: str = Field(nullable=False)
+    users: List["DBUser"] = Relationship(back_populates="users") #Field(nullable=False)
     roles: Optional[str] = "[]"
     server_name: str = Field(nullable=False)
     nicknames: Optional[str] = "{}"
@@ -47,7 +51,7 @@ class DBUser(User, table=True):
     snowflake: int = Field(unique=True, primary_key=True, nullable=False)
     username: str = Field(nullable=False)
     password_hashed: str = Field(nullable=False)
-    servers: str = Field(nullable=False)
+    servers: List["Server"] = Relationship(back_populates="servers") #str = Field(nullable=False)
 
 
 sqlite_file_name = "main.db"
